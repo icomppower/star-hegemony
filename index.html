@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>星際霸權 Star Hegemony</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="game-root">
+  <canvas id="game"></canvas>
+
+  <!-- 戰鬥 HUD -->
+  <div id="hud" class="hidden">
+    <div id="hud-top">
+      <div class="fleet-panel" id="panel-player">
+        <div class="fleet-name">聯邦第13艦隊 · 里昂・凱撒</div>
+        <div class="bar-row"><span class="bar-label">戰力</span><div class="bar"><div class="bar-fill str" id="bar-player-str"></div></div></div>
+        <div class="bar-row"><span class="bar-label">士氣</span><div class="bar"><div class="bar-fill morale" id="bar-player-morale"></div></div></div>
+        <div class="ship-count" id="count-player"></div>
+      </div>
+      <div id="battle-title">賽勒斯星域遭遇戰</div>
+      <div class="fleet-panel enemy" id="panel-enemy">
+        <div class="fleet-name">帝國艦隊 · 法爾肯・雷因哈特</div>
+        <div class="bar-row"><span class="bar-label">戰力</span><div class="bar"><div class="bar-fill str enemy" id="bar-enemy-str"></div></div></div>
+        <div class="bar-row"><span class="bar-label">士氣</span><div class="bar"><div class="bar-fill morale" id="bar-enemy-morale"></div></div></div>
+        <div class="ship-count" id="count-enemy"></div>
+      </div>
+    </div>
+    <div id="log"></div>
+    <div id="banner"></div>
+    <div id="tactic-bar"></div>
+  </div>
+
+  <!-- 戰役 HUD -->
+  <div id="campaign-hud" class="hidden">
+    <div class="c-stat">回合 <b id="c-turn">1</b></div>
+    <div class="c-stat">💰 <b id="c-credits">0</b></div>
+    <div class="c-stat" title="補給:艦隊移動消耗,友方星域回補。斷補給會重創士氣">📦 <b id="c-supplies">100</b></div>
+    <div class="c-stat" title="議會支持度:影響撥款,太低會被解除指揮權">🏛️ <b id="c-rep">50</b></div>
+    <div class="c-stat">🚩 <b id="c-fleet">0</b> 艦</div>
+    <div id="officer-chips"></div>
+    <button id="btn-armistice" class="c-btn">🕊️ 停戰談判</button>
+  </div>
+  <div id="system-panel" class="hidden"></div>
+  <div id="campaign-toast"></div>
+  <div id="modal-root"></div>
+
+  <!-- 主選單 -->
+  <div id="title-screen" class="overlay">
+    <h1>星際霸權</h1>
+    <h2>STAR HEGEMONY</h2>
+    <p class="tagline">專制帝國 vs 民主聯邦 — 天才將領嘅戰術對決</p>
+    <div class="briefing">
+      <p><strong>戰役模式:</strong>喺星圖上調兵遣將——經濟、補給線、議會政治、黑天鵝事件、策反諜報,一路打到帝國首都<strong>奧丁</strong>。</p>
+      <p><strong>遭遇戰:</strong>單場艦隊戰,同雷因哈特正面對決。</p>
+      <p class="controls-hint">🖱️ 點擊指揮 | ⌨️ 1–6 戰術 · 7 策反 · 8 撤退 · M 靜音</p>
+    </div>
+    <div class="title-buttons">
+      <button id="btn-campaign">🌌 新戰役</button>
+      <button id="btn-continue" class="hidden">📂 繼續戰役</button>
+      <button id="btn-quick">⚔️ 遭遇戰</button>
+    </div>
+    <p class="proto-note">Prototype v0.2 — 戰役層 · 六大戰術 · 諜報 · 議會 · 黑天鵝 · 戰史回放</p>
+  </div>
+
+  <!-- 戰鬥結束 -->
+  <div id="end-screen" class="overlay hidden">
+    <h1 id="end-title"></h1>
+    <p id="end-detail"></p>
+    <div class="title-buttons">
+      <button id="btn-restart">🔄 再戰一場</button>
+      <button id="btn-replay">📽️ 戰史回放</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
