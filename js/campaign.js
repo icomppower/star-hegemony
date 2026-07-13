@@ -1,6 +1,7 @@
 // 戰役層 — 星圖、回合、經濟、補給線、議會、帝國 AI(純邏輯,無 DOM)
 import { pickBlackSwan } from './events.js';
 import { REPAIR_DISCOUNT, SUPPLY_DISCOUNT } from './roster.js';
+import { applyResearch, TECH_BY_ID } from './tech.js';
 
 export const SHIP_COST = { cruiser: 350, destroyer: 200, frigate: 120 };
 export const SHIP_HP = { flagship: 800, cruiser: 340, destroyer: 200, frigate: 120 };
@@ -39,6 +40,7 @@ export function newCampaign() {
     reinhardt: { system: 'valhalla', weakened: false, frozen: 0, destroyed: false, rebuildAt: 0, sieging: null },
     ghost: { active: false, empireHired: false },
     armisticeUsed: false,
+    tech: { hull: 0, logistics: 0, econ: 0 },
     usedEvents: [], recentDecisions: [], flags: {},
     pendingBattle: null, over: null,
     stats: { battles: 0, wins: 0, kills: 0, losses: 0 },
@@ -47,12 +49,12 @@ export function newCampaign() {
 
 export function currentSystem(st) { return SYS[st.playerSystem]; }
 export function isAdjacent(st, id) { return SYS[st.playerSystem].links.includes(id); }
-export function moveCost() { return Math.round(10 * SUPPLY_DISCOUNT); }
+export function moveCost(st) { return Math.max(2, Math.round(10 * SUPPLY_DISCOUNT * (1 - 0.1 * (st?.tech.logistics || 0)))); }
 
 export function repairCost(st) {
   let missing = 0;
   for (const s of st.fleet) missing += Math.max(0, SHIP_HP[s.type] - s.hp);
-  return Math.ceil(missing * 0.35 * REPAIR_DISCOUNT);
+  return Math.ceil(missing * 0.35 * REPAIR_DISCOUNT * (1 - 0.08 * (st.tech.hull || 0)));
 }
 
 // ---------- 玩家行動(每個行動 = 1 回合) ----------
@@ -61,7 +63,7 @@ export function playerAction(st, action) {
   switch (action.type) {
     case 'move': {
       if (!isAdjacent(st, action.to)) return { error: '唔相鄰' };
-      st.supplies = clamp(st.supplies - moveCost(), 0, 100);
+      st.supplies = clamp(st.supplies - moveCost(st), 0, 100);
       st.lastSystem = st.playerSystem;
       st.playerSystem = action.to;
       // 攻打奧丁 = 決戰:雷因哈特必定回防首都
@@ -104,6 +106,11 @@ export function playerAction(st, action) {
       st.rep = clamp(st.rep - 12, 0, 100);
       st.reinhardt.frozen = 4;
       return { battle: false, text: '停戰談判達成:帝國艦隊 4 回合內唔會行動。議會鷹派好唔滿意(支持度 -12)。' };
+    }
+    case 'research': {
+      const r = applyResearch(st, action.id);
+      if (r.error) return { error: r.error };
+      return { battle: false, text: r.text };
     }
   }
   return { error: '未知行動' };
@@ -220,12 +227,13 @@ export function endTurn(st) {
   const results = [];
   st.turn++;
 
-  // 收入
-  const income = SYSTEMS.filter(s => st.owners[s.id] === 'fed').reduce((a, s) => a + s.econ, 0) * 30;
+  // 收入(經濟改革科技加成)
+  const baseIncome = SYSTEMS.filter(s => st.owners[s.id] === 'fed').reduce((a, s) => a + s.econ, 0) * 30;
+  const income = Math.round(baseIncome * (1 + 0.12 * st.tech.econ));
   st.credits += income;
 
-  // 補給線:友方星域回補,敵境消耗
-  if (st.owners[st.playerSystem] === 'fed') st.supplies = clamp(st.supplies + 12, 0, 100);
+  // 補給線:友方星域回補(後勤科技加成),敵境消耗
+  if (st.owners[st.playerSystem] === 'fed') st.supplies = clamp(st.supplies + 12 + 4 * st.tech.logistics, 0, 100);
   else st.supplies = clamp(st.supplies - 5, 0, 100);
   if (st.supplies <= 0) results.push({ type: 'info', icon: '⚠️', title: '補給線斷絕', text: '艦隊補給耗盡!下場戰鬥士氣大減,盡快返回友方星域。' });
 

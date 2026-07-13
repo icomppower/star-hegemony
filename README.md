@@ -18,6 +18,14 @@ python3 -m http.server 8080
 
 (ES modules 需要 http server,直接開 file:// 唔得)
 
+## v0.3 — 科技樹 Tech Tree Update
+
+- **科研院**(HUD「🔬 科研」按鈕):三條科技分支,各 3 級,永久生效
+  - 🛠️ 船塢強化:維修費用 -8%/級
+  - 🚚 後勤網絡:移動補給消耗 -10%/級、友方星域回補 +4/級
+  - 💰 經濟改革:星域收入 +12%/級
+- 研發同招募/維修一樣消耗 1 回合;逐級加價(400/700/1100 資金起)
+
 ## v0.2 — 戰役層 Campaign Update
 
 ### 戰役模式 🌌
@@ -55,6 +63,7 @@ python3 -m http.server 8080
 - `js/campaign-ui.js` — 星圖渲染、系統面板、modal 流程
 - `js/events.js` — 黑天鵝事件 + 政治決策卡
 - `js/roster.js` — 人物名冊(軍官加成)
+- `js/tech.js` — 科技樹(船塢強化/後勤網絡/經濟改革,各 3 級)
 - `js/ui.js` — 戰鬥 HUD
 - `js/audio.js` — Web Audio 合成音效
 

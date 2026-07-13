@@ -7,6 +7,7 @@ import {
 import { OFFICERS } from './roster.js';
 import { pickDecision } from './events.js';
 import { sfx } from './audio.js';
+import { TECH_TREE, techCost } from './tech.js';
 
 const TYPE_ZH = { flagship: '旗艦', cruiser: '巡洋艦', destroyer: '驅逐艦', frigate: '護衛艦' };
 const OWNER_ZH = { fed: '聯邦', emp: '帝國', neutral: '中立' };
@@ -27,6 +28,7 @@ export class CampaignUI {
     this.toastEl = document.getElementById('campaign-toast');
 
     document.getElementById('btn-armistice').addEventListener('click', () => this.action({ type: 'armistice' }));
+    document.getElementById('btn-tech').addEventListener('click', () => this.showTech());
     this.buildOfficerChips();
   }
 
@@ -52,6 +54,7 @@ export class CampaignUI {
   continue() {
     this.st = loadCampaign();
     if (!this.st) return this.startNew();
+    if (!this.st.tech) this.st.tech = { hull: 0, logistics: 0, econ: 0 };
     this.enter();
     if (this.st.pendingBattle) this.launchBattle();
   }
@@ -280,7 +283,7 @@ export class CampaignUI {
       let warn = '';
       if (reinHere) warn = ' ⚔️👑';
       else if (owner === 'emp' && garrison > 0) warn = ' ⚔️';
-      html += `<button class="sp-btn move" data-act="move">🚀 移動去呢度(補給 -${moveCost()})${warn}</button>`;
+      html += `<button class="sp-btn move" data-act="move">🚀 移動去呢度(補給 -${moveCost(st)})${warn}</button>`;
     } else {
       html += `<div class="sp-row dim">唔喺航線範圍內</div>`;
     }
@@ -319,6 +322,37 @@ export class CampaignUI {
           const t = b.dataset.ship;
           const total = cart.reduce((a, x) => a + SHIP_COST[x], 0) + SHIP_COST[t];
           if (total <= st.credits) { cart.push(t); rebuild(); }
+        });
+      });
+    };
+    rebuild();
+  }
+
+  showTech() {
+    const st = this.st;
+    const body = () => TECH_TREE.map(t => {
+      const tier = st.tech[t.id] || 0;
+      const cost = techCost(st, t.id);
+      const bars = '●'.repeat(tier) + '○'.repeat(3 - tier);
+      return `
+        <div class="tech-row">
+          <div class="tech-head">${t.icon} <b>${t.name}</b> <span class="tech-tier">${bars}</span></div>
+          <div class="tech-desc">${t.desc}${tier ? `<br><i>已生效:${t.tierDesc(tier)}</i>` : ''}</div>
+          ${cost !== null
+            ? `<button class="modal-btn small" data-tech="${t.id}" ${st.credits < cost ? 'disabled' : ''}>研發 Lv.${tier + 1}(${cost} 資金)— ${t.tierDesc(tier + 1)}</button>`
+            : `<div class="tech-maxed">✅ 已滿級</div>`}
+        </div>`;
+    }).join('');
+
+    const rebuild = () => {
+      this.showModal({
+        icon: '🔬', title: '科研院 — 科技樹', body: body(),
+        choices: [{ label: '離開科研院', fn: () => {} }],
+      });
+      this.modalRoot.querySelectorAll('[data-tech]').forEach(b => {
+        b.addEventListener('click', () => {
+          this.modalRoot.innerHTML = '';
+          this.action({ type: 'research', id: b.dataset.tech });
         });
       });
     };
