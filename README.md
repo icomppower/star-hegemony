@@ -2,8 +2,6 @@
 
 原創太空艦隊戰略遊戲 — 專制帝國 vs 民主聯邦。
 
-GDD: [Notion](https://app.notion.com/p/3921f269eaea8108b6e7e7855ce4edcb)
-
 ## 技術棧
 
 Canvas 2D + Vanilla JS(ES modules)+ Web Audio,零依賴 — 同 Tower Control 相同 pipeline。
