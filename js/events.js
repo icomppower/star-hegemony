@@ -111,6 +111,19 @@ export const BLACK_SWANS = [
     ],
   },
   {
+    id: 'counterintel', icon: '🕶️', title: '帝國反情報行動',
+    desc: '伊莉娜・佩卓娃嘅反情報部門滲透咗你哋嘅偵察網絡,情報渠道岌岌可危。',
+    weight: 1.5, condition: st => st.turn > 4,
+    choices: [
+      { label: '艾莎全力反制(150 資金)', apply(st) {
+        if (st.credits < 150) { st.intel.blackout = st.turn + 2; return '資金不足反制,偵察網絡癱瘓 2 回合。'; }
+        st.credits -= 150;
+        return '艾莎連夜重建加密頻道,偵察網絡冇受影響。「伊莉娜,下次仲未必咁好彩。」';
+      } },
+      { label: '暫時斷網自保', apply(st) { st.intel.blackout = st.turn + 2; return '主動斷網避險,偵察網絡 2 回合內無法使用。「伊莉娜・佩卓娃又贏一仗。」'; } },
+    ],
+  },
+  {
     id: 'convoy', icon: '🚚', title: '補給船隊到達',
     desc: '菲比・克羅斯安排嘅補給船隊突破封鎖成功會合!',
     weight: 2, condition: st => st.supplies < 60,

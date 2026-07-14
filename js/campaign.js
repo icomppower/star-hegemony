@@ -41,6 +41,7 @@ export function newCampaign() {
     ghost: { active: false, empireHired: false },
     armisticeUsed: false,
     tech: { hull: 0, logistics: 0, econ: 0 },
+    intel: { scouted: {}, reinhardtSeenAt: 'valhalla', reinhardtSeenTurn: 1, blackout: 0 },
     usedEvents: [], recentDecisions: [], flags: {},
     pendingBattle: null, over: null,
     stats: { battles: 0, wins: 0, kills: 0, losses: 0 },
@@ -50,6 +51,51 @@ export function newCampaign() {
 export function currentSystem(st) { return SYS[st.playerSystem]; }
 export function isAdjacent(st, id) { return SYS[st.playerSystem].links.includes(id); }
 export function moveCost(st) { return Math.max(2, Math.round(10 * SUPPLY_DISCOUNT * (1 - 0.1 * (st?.tech.logistics || 0)))); }
+
+// ---------- 情報戰 Intelligence War ----------
+export const SCOUT_COST = 100;
+export const SCOUT_SUPPLY = 10;
+export const SCOUT_DURATION = 5;
+
+// 聯邦星域網絡外圍 2 跳內,艾莎嘅線人網絡照樣有情報回報
+function hopDistanceFromFed(st, sysId) {
+  if (st.owners[sysId] === 'fed') return 0;
+  const visited = new Set(Object.keys(st.owners).filter(id => st.owners[id] === 'fed'));
+  let frontier = [...visited];
+  let dist = 0;
+  while (frontier.length) {
+    dist++;
+    const next = [];
+    for (const id of frontier) {
+      for (const n of SYS[id].links) {
+        if (visited.has(n)) continue;
+        if (n === sysId) return dist;
+        visited.add(n);
+        next.push(n);
+      }
+    }
+    frontier = next;
+  }
+  return Infinity;
+}
+
+// 星域係咪處於己方情報覆蓋範圍(己方領土/艦隊感應/線人網絡/偵察報告有效期內)
+export function isRevealed(st, sysId) {
+  if (sysId === st.playerSystem) return true;
+  if (st.owners[sysId] === 'fed') return true;
+  if (isAdjacent(st, sysId)) return true;
+  if ((st.intel.scouted[sysId] || 0) >= st.turn) return true;
+  return hopDistanceFromFed(st, sysId) <= 2;
+}
+
+// 每次行動/回合結束後,將雷因哈特目前所在地(如喺情報覆蓋範圍內)寫入已知情報
+export function refreshIntel(st) {
+  if (!st.intel || st.reinhardt.destroyed) return;
+  if (isRevealed(st, st.reinhardt.system)) {
+    st.intel.reinhardtSeenAt = st.reinhardt.system;
+    st.intel.reinhardtSeenTurn = st.turn;
+  }
+}
 
 export function repairCost(st) {
   let missing = 0;
@@ -111,6 +157,22 @@ export function playerAction(st, action) {
       const r = applyResearch(st, action.id);
       if (r.error) return { error: r.error };
       return { battle: false, text: r.text };
+    }
+    case 'scout': {
+      if (isRevealed(st, action.target)) return { error: '呢個星域情報已經好清楚,唔使再偵察' };
+      if ((st.intel.blackout || 0) >= st.turn) return { error: '偵察網絡遭反情報癱瘓中,暫時冇辦法派遣' };
+      if (st.credits < SCOUT_COST) return { error: '資金不足' };
+      st.credits -= SCOUT_COST;
+      st.supplies = clamp(st.supplies - SCOUT_SUPPLY, 0, 100);
+      st.intel.scouted[action.target] = st.turn + SCOUT_DURATION;
+      refreshIntel(st);
+      const hit = !st.reinhardt.destroyed && st.reinhardt.system === action.target;
+      return {
+        battle: false,
+        text: hit
+          ? `偵察艦傳回確切座標:雷因哈特艦隊現正喺${SYS[action.target].name}!`
+          : `偵察報告:${SYS[action.target].name}情報已更新(${SCOUT_DURATION} 回合內有效)。`,
+      };
     }
   }
   return { error: '未知行動' };
@@ -302,6 +364,7 @@ export function endTurn(st) {
     }
   }
 
+  refreshIntel(st);
   if (st.over) results.push({ type: 'gameover' });
   return { results, income };
 }

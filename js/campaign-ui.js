@@ -3,6 +3,7 @@ import {
   SYSTEMS, SYS, newCampaign, loadCampaign, saveCampaign, clearSave,
   playerAction, endTurn, buildBattleConfig, applyBattleResult,
   repairCost, moveCost, SHIP_COST, SHIP_HP, isAdjacent,
+  isRevealed, refreshIntel, SCOUT_COST, SCOUT_SUPPLY,
 } from './campaign.js';
 import { OFFICERS } from './roster.js';
 import { pickDecision } from './events.js';
@@ -55,6 +56,7 @@ export class CampaignUI {
     this.st = loadCampaign();
     if (!this.st) return this.startNew();
     if (!this.st.tech) this.st.tech = { hull: 0, logistics: 0, econ: 0 };
+    if (!this.st.intel) this.st.intel = { scouted: {}, reinhardtSeenAt: this.st.reinhardt.system, reinhardtSeenTurn: this.st.turn, blackout: 0 };
     this.enter();
     if (this.st.pendingBattle) this.launchBattle();
   }
@@ -237,6 +239,7 @@ export class CampaignUI {
   refresh() {
     const st = this.st;
     if (!st) return;
+    refreshIntel(st);
     document.getElementById('c-turn').textContent = st.turn;
     document.getElementById('c-credits').textContent = st.credits;
     document.getElementById('c-supplies').textContent = st.supplies;
@@ -256,14 +259,20 @@ export class CampaignUI {
     const here = st.playerSystem === sys.id;
     const adj = isAdjacent(st, sys.id);
     const garrison = st.garrisons[sys.id] || 0;
+    const revealed = isRevealed(st, sys.id);
     const reinHere = !st.reinhardt.destroyed && st.reinhardt.system === sys.id;
+    const reinLastSeenHere = !st.reinhardt.destroyed && st.intel.reinhardtSeenAt === sys.id && !(reinHere && revealed);
 
     let html = `
       <div class="sp-title" style="color:${OWNER_COLOR[owner]}">${sys.capital ? '✦ ' : ''}${sys.name}</div>
       <div class="sp-row">陣營:<b style="color:${OWNER_COLOR[owner]}">${OWNER_ZH[owner]}</b>${sys.capital ? '(首都)' : ''}</div>
       <div class="sp-row">經濟:${'¤'.repeat(sys.econ) || '—'} ${sys.shipyard ? '· ⚓ 船塢' : ''}</div>`;
-    if (garrison > 0 && owner === 'emp') html += `<div class="sp-row">🕵️ 艾莎情報:駐防等級 ${garrison}</div>`;
-    if (reinHere) html += `<div class="sp-row warn">👑 雷因哈特艦隊喺呢度${st.reinhardt.weakened ? '(重創未復)' : ''}${st.reinhardt.frozen > 0 ? ' ❄ 按兵不動' : ''}</div>`;
+    if (owner === 'emp' && !here) {
+      if (revealed && garrison > 0) html += `<div class="sp-row">🕵️ 情報:駐防等級 ${garrison}</div>`;
+      else if (!revealed) html += `<div class="sp-row dim">🌫️ 敵情不明 — 超出情報覆蓋範圍</div>`;
+    }
+    if (reinHere && revealed) html += `<div class="sp-row warn">👑 雷因哈特艦隊喺呢度${st.reinhardt.weakened ? '(重創未復)' : ''}${st.reinhardt.frozen > 0 ? ' ❄ 按兵不動' : ''}</div>`;
+    else if (reinLastSeenHere) html += `<div class="sp-row dim">📡 情報(回合 ${st.intel.reinhardtSeenTurn}):雷因哈特上次目擊喺呢度,而家位置未知</div>`;
     if (here) {
       const byType = {};
       for (const s of st.fleet) byType[s.type] = (byType[s.type] || 0) + 1;
@@ -284,8 +293,13 @@ export class CampaignUI {
       if (reinHere) warn = ' ⚔️👑';
       else if (owner === 'emp' && garrison > 0) warn = ' ⚔️';
       html += `<button class="sp-btn move" data-act="move">🚀 移動去呢度(補給 -${moveCost(st)})${warn}</button>`;
-    } else {
+    } else if (!revealed) {
+      const blackout = (st.intel.blackout || 0) >= st.turn;
       html += `<div class="sp-row dim">唔喺航線範圍內</div>`;
+      html += `<button class="sp-btn" data-act="scout" ${st.credits < SCOUT_COST || blackout ? 'disabled' : ''}>🔭 派遣偵察艦(${SCOUT_COST} 資金 / ${SCOUT_SUPPLY} 補給)</button>`;
+      if (blackout) html += `<div class="sp-row dim">⚠️ 偵察網絡遭反情報癱瘓中</div>`;
+    } else {
+      html += `<div class="sp-row dim">唔喺航線範圍內(已有情報覆蓋)</div>`;
     }
     html += '</div>';
     this.panel.innerHTML = html;
@@ -297,6 +311,7 @@ export class CampaignUI {
         else if (act === 'repair') this.action({ type: 'repair' });
         else if (act === 'hold') this.action({ type: 'hold' });
         else if (act === 'recruit') this.showRecruit();
+        else if (act === 'scout') this.action({ type: 'scout', target: sys.id });
       });
     });
   }
@@ -454,7 +469,8 @@ export class CampaignUI {
       if (sys.econ) extras.push('¤'.repeat(sys.econ));
       if (sys.shipyard) extras.push('⚓');
       const g = st.garrisons[sys.id] || 0;
-      if (g > 0 && st.owners[sys.id] === 'emp') extras.push(`守${g}`);
+      const rev = isRevealed(st, sys.id);
+      if (st.owners[sys.id] === 'emp' && g > 0) extras.push(rev ? `守${g}` : '守❓');
       if (extras.length) ctx.fillText(extras.join(' '), sys.x, sys.y + r + 38);
     }
 
@@ -475,13 +491,15 @@ export class CampaignUI {
     ctx.fillStyle = 'rgba(93,177,255,.9)';
     ctx.fillText('第13艦隊', ps.x, ps.y - 34);
 
-    // 雷因哈特標記
+    // 雷因哈特標記 — 根據情報覆蓋顯示實時或過時位置
     if (!st.reinhardt.destroyed) {
-      const rs = SYS[st.reinhardt.system];
+      const stale = st.intel.reinhardtSeenTurn < st.turn;
+      const rs = SYS[st.intel.reinhardtSeenAt];
       const ra = -t * 1.4;
       const rx = rs.x + Math.cos(ra) * 34, ry = rs.y + Math.sin(ra) * 34;
-      ctx.fillStyle = '#ff6a55';
       ctx.save();
+      ctx.globalAlpha = stale ? 0.4 : 1;
+      ctx.fillStyle = '#ff6a55';
       ctx.translate(rx, ry);
       ctx.rotate(ra + Math.PI / 2);
       ctx.beginPath();
@@ -489,8 +507,11 @@ export class CampaignUI {
       ctx.closePath();
       ctx.fill();
       ctx.restore();
-      ctx.fillStyle = 'rgba(255,106,85,.9)';
-      ctx.fillText(`👑 雷因哈特${st.reinhardt.frozen > 0 ? ' ❄' : ''}`, rs.x, rs.y - 34);
+      ctx.fillStyle = stale ? 'rgba(255,106,85,.55)' : 'rgba(255,106,85,.9)';
+      const label = stale
+        ? `👑 雷因哈特(上次目擊:回合${st.intel.reinhardtSeenTurn})`
+        : `👑 雷因哈特${st.reinhardt.frozen > 0 ? ' ❄' : ''}`;
+      ctx.fillText(label, rs.x, rs.y - 34);
     }
     ctx.textAlign = 'left';
   }
